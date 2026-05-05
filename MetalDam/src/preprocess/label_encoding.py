@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Canonical MetalDAM colour → class map (RGB order).
 METALDAM_COLOR_MAP: Dict[Tuple[int, int, int], int] = {
     (255, 0, 255): 0,   # Background / Defect
-    (0, 255, 0):   1,   # Austenite
+    (43, 255, 0):  1,   # Austenite  (dataset uses RGB 43,255,0 — not pure green)
     (128, 0, 255): 2,   # Matrix
     (255, 255, 0): 3,   # Martensite-Austenite (MA)
     (255, 0, 0):   4,   # Precipitate
@@ -192,7 +192,7 @@ def _build_name_map(
     """Return a best-effort {class_index: name} map from known MetalDAM classes."""
     _KNOWN: Dict[Tuple[int, int, int], str] = {
         (255, 0, 255): "Background/Defect",
-        (0, 255, 0):   "Austenite",
+        (43, 255, 0):  "Austenite",
         (128, 0, 255): "Matrix",
         (255, 255, 0): "Martensite-Austenite (MA)",
         (255, 0, 0):   "Precipitate",
@@ -200,46 +200,51 @@ def _build_name_map(
     return {idx: _KNOWN.get(rgb, f"class_{idx}") for rgb, idx in color_map.items()}
 
 
-# ── CLI / usage example ──────────────────────────────────────────────────────
+# ── CLI entry point ──────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import sys
+    import argparse
+    import cv2
+    import yaml
     from pathlib import Path
-    import cv2  # noqa: F401 — only needed in the example runner
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 
-    # ── synthetic usage example (no real images needed) ──────────────────
-    print("=== Synthetic example: 5 MetalDAM classes ===\n")
+    parser = argparse.ArgumentParser(
+        description="Node 03: convert all RGB labels to single-channel class-index masks."
+    )
+    parser.add_argument("--config", default="configs/preprocess.yaml")
+    args = parser.parse_args()
 
-    rng = np.random.default_rng(0)
-    h, w = 256, 256
+    with open(args.config) as fh:
+        cfg = yaml.safe_load(fh)
 
-    # Build a synthetic label by assigning each pixel a random class colour.
-    palette_rgb = np.array(list(METALDAM_COLOR_MAP.keys()), dtype=np.uint8)  # (5, 3)
-    class_ids_flat = rng.integers(0, len(palette_rgb), size=h * w)
-    synthetic_rgb = palette_rgb[class_ids_flat].reshape(h, w, 3)
+    label_dir = Path(cfg.get("raw_label_dir",      "data/raw/coloured_labels"))
+    out_dir   = Path(cfg.get("processed_mask_dir", "data/processed/masks"))
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Add a little JPEG-style colour noise (within tolerance).
-    noise = rng.integers(-10, 11, size=synthetic_rgb.shape, dtype=np.int16)
-    synthetic_rgb = np.clip(synthetic_rgb.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    label_paths = sorted(label_dir.glob("*.png"))
+    if not label_paths:
+        logger.error("No .png files found in '%s'.", label_dir)
+        raise SystemExit(1)
 
-    mask = rgb_to_class_mask(synthetic_rgb, METALDAM_COLOR_MAP, tolerance=20)
-    print(f"Input shape : {synthetic_rgb.shape}  dtype={synthetic_rgb.dtype}")
-    print(f"Output shape: {mask.shape}  dtype={mask.dtype}")
-    print(f"Unique values in mask: {np.unique(mask).tolist()}\n")
-
-    validate_color_map(synthetic_rgb, METALDAM_COLOR_MAP)
-
-    # ── real image path (optional CLI argument) ───────────────────────────
-    if len(sys.argv) > 1:
-        label_path = Path(sys.argv[1])
-        bgr = cv2.imread(str(label_path))
+    n_ok = n_err = 0
+    for lbl_path in label_paths:
+        bgr = cv2.imread(str(lbl_path), cv2.IMREAD_COLOR)
         if bgr is None:
-            sys.exit(f"Cannot read '{label_path}'")
-        rgb = bgr[:, :, ::-1].copy()
-        print(f"\n=== Real label: {label_path.name} ===")
-        validate_color_map(rgb, METALDAM_COLOR_MAP)
-        out_path = label_path.with_suffix(".mask.npy")
-        np.save(str(out_path), rgb_to_class_mask(rgb, METALDAM_COLOR_MAP))
-        print(f"Mask saved to {out_path}")
+            logger.error("Cannot read '%s'; skipping.", lbl_path)
+            n_err += 1
+            continue
+
+        rgb  = bgr[:, :, ::-1].copy()          # BGR → RGB
+        mask = rgb_to_class_mask(rgb, METALDAM_COLOR_MAP, tolerance=20)
+
+        out_path = out_dir / lbl_path.name      # same stem, .png
+        cv2.imwrite(str(out_path), mask)
+        logger.info("✓ %s → %s  (unique classes: %s)",
+                    lbl_path.name, out_path.name, np.unique(mask).tolist())
+        n_ok += 1
+
+    logger.info("Done: %d masks written, %d errors.", n_ok, n_err)
+    if n_err:
+        raise SystemExit(1)

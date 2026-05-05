@@ -1,0 +1,35 @@
+name: prep
+
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # numerical / data
+  - numpy
+  - pandas
+  - scikit-learn
+  - scikit-image
+
+  # image processing
+  - opencv
+
+  # deep learning
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1        # remove or change to cpuonly if no CUDA GPU
+
+  # utilities
+  - pyyaml
+  - tqdm
+
+  - tesseract                  # OCR engine binary (required by pytesseract)
+
+  - pip:
+    - albumentations
+    - pytesseract

@@ -25,12 +25,21 @@ logger = logging.getLogger(__name__)
 # ── constants ────────────────────────────────────────────────────────────────
 # Fraction of image height reserved for the SEM info bar at the bottom.
 _INFO_BAR_FRACTION = 0.12
-# Fraction of image width to inspect for the scale bar (left side of info bar).
-_SCALE_REGION_FRACTION = 0.35
-# Brightness threshold for isolating the white scale bar (0–255).
+# Fraction of image width that contains the scale indicator (RIGHT side).
+# MetalDAM info bars: left side = SEM metadata text (kV, WD, magnification);
+# right side = tick-mark ruler + scale label ("1.00um", "5.00um", etc.).
+_SCALE_REGION_FRACTION = 0.30
+# Brightness threshold for isolating the white scale bar ticks (0–255).
 _BAR_THRESHOLD = 200
-# Minimum horizontal run of white pixels to count as the scale bar.
+# Minimum span (px) of the tick ruler to accept as a valid scale bar.
 _MIN_BAR_PX = 10
+# Plausibility bounds on the physical scale label read by OCR (µm).
+# Rejects working-distance values ("9.1mm" = 9100 µm) that match the regex.
+_OCR_UM_MIN = 0.05    # 50 nm — highest realistic magnification
+_OCR_UM_MAX = 1000.0  # 1 mm  — lowest realistic SEM magnification
+# Plausibility bounds on the final µm/pixel result.
+_RESULT_UM_PX_MIN = 0.0001  # 0.1 nm/px
+_RESULT_UM_PX_MAX = 50.0    # 50 µm/px
 # OCR scale patterns, e.g. "1 µm", "500 nm", "0.5 mm"
 _SCALE_PATTERN = re.compile(
     r"(\d+(?:\.\d+)?)\s*(nm|µm|um|μm|mm)", re.IGNORECASE
@@ -111,18 +120,33 @@ def extract_um_per_pixel(
     info_strip = _crop_info_strip(img)
 
     # ── strategy 2: OCR ──────────────────────────────────────────────────
+    ocr_succeeded = False
     if use_ocr:
         ocr_um = _ocr_scale_length(info_strip)
         if ocr_um is not None:
-            known_length_um = ocr_um
-            logger.debug("[extract_scale] OCR detected scale label: %.4f µm",
-                         known_length_um)
+            if _OCR_UM_MIN <= ocr_um <= _OCR_UM_MAX:
+                known_length_um = ocr_um
+                ocr_succeeded = True
+                logger.debug("[extract_scale] OCR detected scale label: %.4f µm",
+                             known_length_um)
+            else:
+                logger.warning(
+                    "[extract_scale] %s — OCR value %.4f µm outside plausible "
+                    "range [%.2f, %.0f]; ignoring (likely working-distance field).",
+                    img_path.name, ocr_um, _OCR_UM_MIN, _OCR_UM_MAX,
+                )
 
     # ── strategy 3: pixel measurement ────────────────────────────────────
     bar_pixels = _measure_bar_pixels(info_strip)
     if bar_pixels > 0:
         result = known_length_um / bar_pixels
-        method = "OCR+bar" if use_ocr else "bar"
+        method = "OCR+bar" if ocr_succeeded else "bar"
+        if not (_RESULT_UM_PX_MIN <= result <= _RESULT_UM_PX_MAX):
+            logger.warning(
+                "[extract_scale] %s — result %.6f µm/px is outside plausible "
+                "range [%.4f, %.1f]; check scale bar detection.",
+                img_path.name, result, _RESULT_UM_PX_MIN, _RESULT_UM_PX_MAX,
+            )
         logger.info("[extract_scale] %s — method: %s (bar=%d px → %.6f µm/px)",
                     img_path.name, method, bar_pixels, result)
         return result
@@ -177,37 +201,45 @@ def _load_gray(img_path: Path) -> np.ndarray:
 
 
 def _crop_info_strip(gray: np.ndarray) -> np.ndarray:
-    """Return the bottom-left region that contains the SEM info bar."""
+    """Return the bottom-RIGHT region containing the SEM scale indicator.
+
+    MetalDAM layout: left side of the info bar holds SEM metadata text
+    (kV, working distance, magnification); the right side holds the
+    tick-mark ruler and the scale label ("1.00um", "5.00um", etc.).
+    """
     h, w = gray.shape
     bar_h = max(1, int(h * _INFO_BAR_FRACTION))
     bar_w = max(1, int(w * _SCALE_REGION_FRACTION))
-    return gray[h - bar_h:h, 0:bar_w]
+    return gray[h - bar_h:h, w - bar_w:w]
 
 
 def _measure_bar_pixels(strip: np.ndarray) -> int:
-    """Return the pixel length of the longest white horizontal run in *strip*.
+    """Return the pixel span of the scale-bar tick ruler in *strip*.
 
-    The scale bar in SEM info strips is a solid bright horizontal line.
-    We threshold, find contiguous white rows, and return the width of the
-    widest connected component that passes the minimum-length guard.
+    MetalDAM scale indicators are a series of short tick marks (a dashed
+    ruler), not a single solid bar.  A connected-component approach finds
+    each tick as a separate narrow blob, so none would pass a solid-bar
+    aspect-ratio guard.
+
+    Instead we use a **column projection**: threshold the top half of the
+    strip (where the ticks live, above the scale label text), project onto
+    the x-axis, and measure the distance from the leftmost to the rightmost
+    column that contains any bright pixel.  This gives the full tick-ruler
+    span regardless of the number of gaps between ticks.
     """
-    _, binary = cv2.threshold(strip, _BAR_THRESHOLD, 255, cv2.THRESH_BINARY)
+    # Use only the top half — ticks are above the label text.
+    top = strip[: max(1, strip.shape[0] // 2), :]
+    _, binary = cv2.threshold(top, _BAR_THRESHOLD, 255, cv2.THRESH_BINARY)
 
-    # Connected-component analysis is more robust than per-row runs when the
-    # bar has tiny gaps due to JPEG compression.
-    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(
-        binary, connectivity=8
-    )
+    # Column projection: which columns contain at least one white pixel?
+    col_has_white = binary.any(axis=0)
+    white_cols = np.where(col_has_white)[0]
 
-    best = 0
-    for i in range(1, num_labels):          # skip background label 0
-        comp_w = int(stats[i, cv2.CC_STAT_WIDTH])
-        comp_h = int(stats[i, cv2.CC_STAT_HEIGHT])
-        # Scale bars are wide and thin.
-        if comp_w >= _MIN_BAR_PX and comp_w > comp_h * 3:
-            best = max(best, comp_w)
+    if len(white_cols) == 0:
+        return 0
 
-    return best
+    span = int(white_cols[-1] - white_cols[0] + 1)
+    return span if span >= _MIN_BAR_PX else 0
 
 
 def _ocr_scale_length(strip: np.ndarray) -> float | None:
@@ -278,5 +310,20 @@ if __name__ == "__main__":
             logger.error("%s", exc)
 
     if results:
-        out_df = pd.DataFrame(results)
-        print(out_df.to_string(index=False))
+        new_df = pd.DataFrame(results)   # columns: filename, um_per_pixel
+
+        # Merge into existing metadata.csv if present; otherwise create it.
+        if csv_path.exists():
+            existing = pd.read_csv(csv_path, dtype={"filename": str})
+            # Update um_per_pixel for rows that exist; append new rows.
+            existing = existing.set_index("filename")
+            new_df   = new_df.set_index("filename")
+            existing.update(new_df)
+            merged = pd.concat([existing, new_df[~new_df.index.isin(existing.index)]])
+            merged = merged.reset_index().rename(columns={"index": "filename"})
+        else:
+            merged = new_df
+
+        merged.to_csv(csv_path, index=False)
+        logger.info("[extract_scale] Saved %d rows to %s", len(merged), csv_path)
+        print(new_df.reset_index().to_string(index=False))

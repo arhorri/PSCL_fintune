@@ -114,7 +114,7 @@ class MetalDAMConfig:
         self.IncNorm   = IncNorm   if IncNorm   is not None else ['BN', 'BN']
         self.DownNorm  = DownNorm  if DownNorm  is not None else ['BN', 'BN']
         self.UpNorm    = UpNorm    if UpNorm    is not None else ['BN', 'LN']
-        self.HeadNrom  = HeadNrom  if HeadNrom  is not None else ['LN']
+        self.HeadNrom  = HeadNrom  if HeadNrom  is not None else ['LN', '']
         self.confea_num = confea_num
         self.hidfea_num = hidfea_num
         self.multihead  = multihead

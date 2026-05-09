@@ -309,4 +309,6 @@ Pscl_fintune/
 | `No such file: moco200.pt` when running `--stage fine` | Stage 1 not finished | Run `--stage self` first, or change `FINETUNE_CKPT_EP` to an existing epoch |
 | `ModuleNotFoundError: No module named 'model'` | PSCL path wrong | Check `_PSCL_SRC` in `train_metaldam.py` points to the correct directory |
 | `RuntimeError: Expected all tensors to be on the same device` | No GPU / wrong device | Set `GPU = '0'` and verify CUDA is available |
+| `IndexError: list index out of range` in `networks.py` line 244 | `HeadNrom` list too short | Ensure `HeadNrom=['LN', '']` (two elements) in `config_metaldam.py` |
+| `IndexError: index 6 is out of bounds for axis 0 with size 6` in `model.py` | PSCL hardcodes 6 production groups; MetalDAM has 29+ parent images | Fixed in `data_metaldam.py`: IDs bucketed into 4 groups via `parent_num % 4` |
 | Low mIoU on Precipitate (class 3) | Rare class underrepresented | Increase `weight[3]` in `config_metaldam.py` (default `[1,1,5,5]`) |

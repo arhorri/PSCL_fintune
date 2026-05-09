@@ -159,6 +159,10 @@ class MetalDAMMoCoDataset(data.Dataset):
     def __getitem__(self, index):
         fname     = self.filelist[index]
         parent_id = fname.split('__')[0]    # e.g., "micrograph0"
+        # model.py hardcodes np.eye(6): split('_')[0] must map to ≤5 unique values.
+        # Bucket parent images into 4 groups so the prefix 'g0'..'g3' is always < 6.
+        parent_num = int(''.join(filter(str.isdigit, parent_id)) or '0')
+        id_str = f'g{parent_num % 4}_{parent_id}'
         img_rgb   = _load_image(os.path.join(self.img_dir, fname))
 
         img1 = self.transform(img_rgb)
@@ -179,7 +183,7 @@ class MetalDAMMoCoDataset(data.Dataset):
         img2 = transforms.Resize([h, w])(img2)
 
         img12 = torch.cat([img1, img2], dim=0)   # (6, H, W)
-        return img12, parent_id, rot_k, filp, r1, r2, r3, r4
+        return img12, id_str, rot_k, filp, r1, r2, r3, r4
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +214,8 @@ class MetalDAMMoCoDatasetSup(data.Dataset):
     def __getitem__(self, index):
         fname     = self.filelist[index]
         parent_id = fname.split('__')[0]
+        parent_num = int(''.join(filter(str.isdigit, parent_id)) or '0')
+        id_str = f'g{parent_num % 4}_{parent_id}'
         img_rgb   = _load_image(os.path.join(self.img_dir, fname))
         mask      = _load_mask(os.path.join(self.mask_dir, fname))
 
@@ -243,4 +249,4 @@ class MetalDAMMoCoDatasetSup(data.Dataset):
         gt   = transforms.Resize([h, w])(gt)
 
         img12G = torch.cat([img1, img2, gt], dim=0)   # (10, H, W)
-        return img12G, parent_id, rot_k, filp, r1, r2, r3, r4
+        return img12G, id_str, rot_k, filp, r1, r2, r3, r4

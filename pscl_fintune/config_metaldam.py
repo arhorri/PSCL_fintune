@@ -91,7 +91,7 @@ class MetalDAMConfig:
         env='0',
         seed=42,
         verb=True,
-        print_freq=100,
+        print_freq=10,
         mapping=None,
     ):
         self.tt      = tt
@@ -191,6 +191,8 @@ def run(
     data_dir: str = METALDAM_PATCHES,
     load_moco_ep: str = '200',
     self_max_epoch: int = 200,
+    start_epoch: int = 0,
+    resume_ckpt: str = None,
     **kwargs,
 ):
     """Build a MetalDAMConfig and launch the requested training stage.
@@ -214,7 +216,7 @@ def run(
     _seed(cfg.seed)
 
     if method == 'self':
-        SelfSupervised_MetalDAM(cfg)
+        SelfSupervised_MetalDAM(cfg, start_epoch=start_epoch, resume_ckpt=resume_ckpt)
     elif method == 'fine':
         Finetune_MetalDAM(cfg)
     else:

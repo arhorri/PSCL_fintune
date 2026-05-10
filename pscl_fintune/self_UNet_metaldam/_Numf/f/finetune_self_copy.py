@@ -6,9 +6,11 @@ Finetune_MetalDAM       : Supervised finetuning using the pretrained encoder
 load_moco               : Loads encoder weights from a PSCL self-supervised checkpoint
 """
 
+import itertools
 import os
 import shutil
 import sys
+import time
 
 import cv2
 import numpy as np
@@ -74,12 +76,16 @@ def SelfSupervised_MetalDAM(cfg):
     train_loader = DataLoader(
         MetalDAMMoCoDataset(cfg.data_dir, jitter_d=cfg.jitter_d, random_c=cfg.random_c),
         batch_size=cfg.self_batch_size, drop_last=True, shuffle=True,
+        num_workers=2, pin_memory=True,
     )
     sup_loader = DataLoader(
         MetalDAMMoCoDatasetSup(cfg.data_dir, sup_split='val',
                                jitter_d=cfg.jitter_d, random_c=cfg.random_c),
         batch_size=1, drop_last=True, shuffle=True,
+        num_workers=1, pin_memory=True,
     )
+    # Cycle sup_loader so we don't recreate an iterator every batch
+    sup_iter = itertools.cycle(sup_loader)
 
     # --- model ---
     MoComodel = cfg.moco_mode(
@@ -160,6 +166,11 @@ def SelfSupervised_MetalDAM(cfg):
         labels = torch.zeros(2*N, device=device, dtype=torch.long)
         return F.cross_entropy(logits, labels, reduction='sum') / (2*N)
 
+    n_batches = len(train_loader)
+    print(f'Training started: {n_batches} batches/epoch, {cfg.self_max_epoch} epochs')
+    print('Note: first batch may take 3-5 min for CUDA kernel compilation.')
+    sys.stdout.flush()
+
     # --- training loop ---
     for epoch in range(cfg.self_max_epoch + 1):
         MoComodel.train()
@@ -170,12 +181,14 @@ def SelfSupervised_MetalDAM(cfg):
             torch.save({'moco': MoComodel.state_dict(), 'epoch': epoch},
                        os.path.join(cfg.tmp, f'moco{epoch}.pt'))
 
+        t_epoch = time.time()
         for i, (inputs, ids, rot_k, filp, r1, r2, r3, r4) in enumerate(train_loader):
+            t_batch = time.time()
             inputs = inputs.cuda(non_blocking=True)
             optimiser.zero_grad()
             x_i, x_j = torch.split(inputs, [3, 3], dim=1)
 
-            inp_s, ids_s, rk_s, fl_s, r1s, r2s, r3s, r4s = next(iter(sup_loader))
+            inp_s, ids_s, rk_s, fl_s, r1s, r2s, r3s, r4s = next(sup_iter)
             inp_s = inp_s.cuda(non_blocking=True)
             x_i_s, x_j_s, y_i_s = torch.split(inp_s, [3, 3, 4], dim=1)
 
@@ -219,11 +232,14 @@ def SelfSupervised_MetalDAM(cfg):
             optimiser.step()
             losses.update(loss.item(), inputs.size(0))
 
-            if i == len(train_loader) - 1:
+            if i % cfg.print_freq == 0 or i == len(train_loader) - 1:
                 lr = optimiser.param_groups[0]['lr']
+                elapsed = time.time() - t_batch
                 print(f'Epoch [{epoch}/{cfg.self_max_epoch}] '
+                      f'[{i+1}/{len(train_loader)}] '
                       f'Loss {losses.avg:.4f}  C {lc.item():.4f}  '
-                      f'Dense {ld.item():.4f}  lr {lr}')
+                      f'Dense {ld.item():.4f}  lr {lr}  '
+                      f'batch {elapsed:.1f}s')
 
         if cfg.sche:
             scheduler.step()

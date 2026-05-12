@@ -4,7 +4,8 @@ Kaggle script-mode entry point for MetalDAM → PSCL finetuning.
 Called by a tiny Kaggle launcher that clones the repo first:
 
     import subprocess, sys
-    BASE            = '/kaggle/input/pscl-files'
+    BASE            = '/kaggle/input/pscl-files'   # dataset with MetalDAM patches only
+    PSCL_REPO       = 'https://github.com/arhorri/PSCL'  # your PSCL GitHub repo
     PRETRAIN_EPOCHS = 200
     RESUME_DATASET  = ''   # '/kaggle/input/pscl-checkpoints' to resume
     STAGE           = 'both'
@@ -15,6 +16,7 @@ Called by a tiny Kaggle launcher that clones the repo first:
     subprocess.run([sys.executable,
                     '/kaggle/working/repo/PSCL_fintune/kaggle_run.py',
                     f'--base={BASE}',
+                    f'--pscl-repo={PSCL_REPO}',
                     f'--pretrain-epochs={PRETRAIN_EPOCHS}',
                     f'--resume-dataset={RESUME_DATASET}',
                     f'--stage={STAGE}'], check=True)
@@ -47,6 +49,11 @@ def _parse_args():
                    dest='resume_dataset',
                    help='Path to a Kaggle dataset containing moco*.pt checkpoints '
                         'from a previous session (leave empty for fresh start)')
+    p.add_argument('--pscl-repo', default='',
+                   dest='pscl_repo',
+                   help='GitHub URL of the PSCL repo to clone '
+                        '(e.g. https://github.com/arhorri/PSCL). '
+                        'If empty, falls back to copying from --base/pscl_fintune_code/PSCL/')
     p.add_argument('--stage', choices=['self', 'fine', 'both'], default='both',
                    help='self = Stage 1 only | fine = Stage 2 only | both = full pipeline')
     p.add_argument('--gpu', default='0')
@@ -63,29 +70,36 @@ def _setup(args):
     pscl_src = os.path.join(work, 'PSCL', 'PSCL')
     data_dir = os.path.join(args.base, 'metaldam_patches', 'MetalDam', 'data', 'patches')
 
-    # Copy PSCL source from read-only dataset to writable working dir
+    # Get PSCL source — clone from GitHub (preferred) or copy from dataset
     if not os.path.exists(pscl_src):
-        src = os.path.join(args.base, 'pscl_fintune_code', 'PSCL')
-        if not os.path.exists(src):
-            # Print the actual layout of the dataset to help diagnose the mismatch
-            print(f'\nERROR: PSCL source not found at expected path: {src}')
-            print(f'\nActual contents of {args.base}:')
-            for root, dirs, files in os.walk(args.base):
-                depth = root.replace(args.base, '').count(os.sep)
-                if depth > 3:
-                    dirs[:] = []   # don't recurse deeper than 3 levels
-                    continue
-                indent = '  ' * depth
-                print(f'{indent}{os.path.basename(root)}/')
-                if depth == 3:
-                    dirs[:] = []
-            raise FileNotFoundError(
-                f'\nFix: upload the PSCL repo to your Kaggle dataset so that '
-                f'pscl_fintune_code/PSCL/PSCL/ exists inside it, '
-                f'then re-run. See the dataset layout printed above.'
+        if args.pscl_repo:
+            import subprocess
+            print(f'Cloning PSCL from {args.pscl_repo} ...')
+            subprocess.run(
+                ['git', 'clone', '--depth', '1', args.pscl_repo,
+                 os.path.join(work, 'PSCL')],
+                check=True
             )
-        shutil.copytree(src, os.path.join(work, 'PSCL'))
-        print('PSCL source copied.')
+            print('PSCL cloned.')
+        else:
+            src = os.path.join(args.base, 'pscl_fintune_code', 'PSCL')
+            if not os.path.exists(src):
+                print(f'\nERROR: PSCL source not found at {src}')
+                print(f'\nActual contents of {args.base}:')
+                for root, dirs, files in os.walk(args.base):
+                    depth = root.replace(args.base, '').count(os.sep)
+                    if depth > 3:
+                        dirs[:] = []
+                        continue
+                    print('  ' * depth + os.path.basename(root) + '/')
+                    if depth == 3:
+                        dirs[:] = []
+                raise FileNotFoundError(
+                    'Pass --pscl-repo=https://github.com/<you>/PSCL to clone it, '
+                    'or add the PSCL folder to the pscl-files dataset.'
+                )
+            shutil.copytree(src, os.path.join(work, 'PSCL'))
+            print('PSCL source copied from dataset.')
     else:
         print('PSCL source already present.')
 
@@ -335,6 +349,7 @@ def main():
 
     print('MetalDAM → PSCL  |  Kaggle script mode')
     print(f'  base             : {args.base}')
+    print(f'  pscl_repo        : {args.pscl_repo or "(from dataset)"}')
     print(f'  pretrain_epochs  : {args.pretrain_epochs}')
     print(f'  stage            : {args.stage}')
     print(f'  resume_dataset   : {args.resume_dataset or "(none)"}')

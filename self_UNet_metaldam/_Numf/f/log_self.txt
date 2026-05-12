@@ -1,0 +1,13 @@
+Training started: 98 batches/epoch, 200 epochs
+Note: first batch may take 3-5 min for CUDA kernel compilation.
+Epoch [0/200] [1/98] Loss 35.0353  C 26.1643  Dense 38.8372  lr 0.0001  batch 26.2s
+Epoch [0/200] [11/98] Loss 128.0675  C 27.0875  Dense 175.3776  lr 0.0001  batch 31.8s
+Epoch [0/200] [21/98] Loss 128.0283  C 23.3018  Dense 164.1553  lr 0.0001  batch 31.4s
+Epoch [0/200] [31/98] Loss 122.8675  C 19.8406  Dense 149.7455  lr 0.0001  batch 28.3s
+Epoch [0/200] [41/98] Loss 117.0843  C 12.8965  Dense 128.3011  lr 0.0001  batch 28.2s
+Epoch [0/200] [51/98] Loss 111.6548  C 10.8497  Dense 121.4791  lr 0.0001  batch 35.2s
+Epoch [0/200] [61/98] Loss 101.2998  C 8.3714  Dense 35.9182  lr 0.0001  batch 27.0s
+Epoch [0/200] [71/98] Loss 91.3043  C 10.0909  Dense 41.6288  lr 0.0001  batch 31.5s
+Epoch [0/200] [81/98] Loss 83.7732  C 7.5751  Dense 35.6925  lr 0.0001  batch 31.2s
+Epoch [0/200] [91/98] Loss 77.8830  C 8.5317  Dense 39.7301  lr 0.0001  batch 26.9s
+Epoch [0/200] [98/98] Loss 74.4770  C 7.8381  Dense 38.7321  lr 0.0001  batch 29.0s

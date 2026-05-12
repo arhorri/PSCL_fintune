@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../MetalDam"
+		},
+		{
+			"path": "../PSCL/PSCL"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}

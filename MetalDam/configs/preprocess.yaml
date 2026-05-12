@@ -1,0 +1,34 @@
+# MetalDAM preprocessing configuration
+# Edit this file to change pipeline parameters.
+# Do NOT hard-code values in individual scripts.
+
+# ── Patch extraction ────────────────────────────
+patch_size: 256
+stride: 128
+min_foreground: 0.05
+
+# ── Resolution normalisation ────────────────────
+target_um_per_px: null
+
+# ── Intensity normalisation ─────────────────────
+normalize_method: zscore
+
+# ── Train / val / test split ────────────────────
+train_ratio: 0.7
+val_ratio: 0.15
+test_ratio: 0.15
+seed: 42
+
+# ── Label encoding ──────────────────────────────
+ignore_label: 255
+
+# ── Paths ───────────────────────────────────────
+metadata_csv: metadata.csv
+raw_image_dir: data/raw/images
+raw_label_dir: data/raw/coloured_labels
+processed_image_dir: data/processed/images
+processed_mask_dir: data/processed/masks
+normed_image_dir: data/processed/images
+normed_mask_dir: data/processed/masks
+patch_dir: data/patches
+

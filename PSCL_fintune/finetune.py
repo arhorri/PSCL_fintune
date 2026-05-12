@@ -132,8 +132,6 @@ def SelfSupervised_MetalDAM(cfg, start_epoch=0, resume_ckpt=None):
         MoComodel.load_state_dict(state['moco'])
         if 'optim' in state:
             optimiser.load_state_dict(state['optim'])
-            for pg in optimiser.param_groups:
-                pg['lr'] = cfg.self_lr
         for _ in range(start_epoch):
             scheduler.step()
         print(f'Resumed from {resume_ckpt} (epoch {start_epoch})')

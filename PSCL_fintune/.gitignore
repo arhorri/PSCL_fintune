@@ -1,0 +1,14 @@
+# Data (large — not tracked in Git)
+MetalDam/
+pscl_fintune/
+
+# Checkpoints
+self_UNet_metaldam/
+fine_UNet_metaldam/
+*.pt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/

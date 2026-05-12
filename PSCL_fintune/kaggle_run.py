@@ -67,9 +67,22 @@ def _setup(args):
     if not os.path.exists(pscl_src):
         src = os.path.join(args.base, 'pscl_fintune_code', 'PSCL')
         if not os.path.exists(src):
+            # Print the actual layout of the dataset to help diagnose the mismatch
+            print(f'\nERROR: PSCL source not found at expected path: {src}')
+            print(f'\nActual contents of {args.base}:')
+            for root, dirs, files in os.walk(args.base):
+                depth = root.replace(args.base, '').count(os.sep)
+                if depth > 3:
+                    dirs[:] = []   # don't recurse deeper than 3 levels
+                    continue
+                indent = '  ' * depth
+                print(f'{indent}{os.path.basename(root)}/')
+                if depth == 3:
+                    dirs[:] = []
             raise FileNotFoundError(
-                f'PSCL source not found at {src}\n'
-                'Make sure the pscl-files dataset contains pscl_fintune_code/PSCL/'
+                f'\nFix: upload the PSCL repo to your Kaggle dataset so that '
+                f'pscl_fintune_code/PSCL/PSCL/ exists inside it, '
+                f'then re-run. See the dataset layout printed above.'
             )
         shutil.copytree(src, os.path.join(work, 'PSCL'))
         print('PSCL source copied.')

@@ -1,0 +1,13 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt

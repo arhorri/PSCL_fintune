@@ -54,6 +54,12 @@ def _parse_args():
                    help='GitHub URL of the PSCL repo to clone '
                         '(e.g. https://github.com/arhorri/PSCL). '
                         'If empty, falls back to copying from --base/pscl_fintune_code/PSCL/')
+    p.add_argument('--finetune-lr-en', type=float, default=1e-4,
+                   dest='finetune_lr_en',
+                   help='Finetuning LR for the encoder (default 1e-4)')
+    p.add_argument('--finetune-lr-de', type=float, default=1e-3,
+                   dest='finetune_lr_de',
+                   help='Finetuning LR for the decoder (default 1e-3)')
     p.add_argument('--stage', choices=['self', 'fine', 'both'], default='both',
                    help='self = Stage 1 only | fine = Stage 2 only | both = full pipeline')
     p.add_argument('--gpu', default='0')
@@ -202,11 +208,14 @@ def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gp
     print('Stage 1 complete.')
 
 
-def _run_stage2(cfg_mod, code_dir, data_dir, pretrain_epochs, gpu):
+def _run_stage2(cfg_mod, code_dir, data_dir, pretrain_epochs, gpu,
+                finetune_lr_en=1e-4, finetune_lr_de=1e-3):
     fine_ckpt = os.path.join(code_dir, 'fine_UNet_metaldam', '_Numf', 'f', 'fine.pt')
     moco_ckpt = os.path.join(code_dir, 'self_UNet_metaldam', '_Numf', 'f', f'moco{pretrain_epochs}.pt')
     print(f'\n{"="*60}')
     print('Stage 2 — Supervised finetuning')
+    print(f'  encoder LR : {finetune_lr_en}')
+    print(f'  decoder LR : {finetune_lr_de}')
     print('='*60)
     if os.path.exists(fine_ckpt):
         print('fine.pt already exists — skipping Stage 2.')
@@ -222,6 +231,8 @@ def _run_stage2(cfg_mod, code_dir, data_dir, pretrain_epochs, gpu):
         tt='metaldam',
         data_dir=data_dir,
         load_moco_ep=str(pretrain_epochs),
+        fineturn_lr_en=finetune_lr_en,
+        fineturn_lr_de=finetune_lr_de,
         env=gpu,
     )
     print('Stage 2 complete.')
@@ -374,7 +385,9 @@ def main():
                         start_epoch, resume_ckpt, args.gpu)
 
     if args.stage in ('fine', 'both'):
-        _run_stage2(config_metaldam, code_dir, data_dir, args.pretrain_epochs, args.gpu)
+        _run_stage2(config_metaldam, code_dir, data_dir, args.pretrain_epochs, args.gpu,
+                    finetune_lr_en=args.finetune_lr_en,
+                    finetune_lr_de=args.finetune_lr_de)
 
     _list_outputs(code_dir)
     _save_curves(code_dir)

@@ -173,7 +173,22 @@ def _verify_data(data_dir):
         if not ok:
             all_ok = False
     if not all_ok:
-        raise SystemExit('Data verification FAILED — re-check the pscl-files dataset.')
+        base = os.path.dirname(os.path.dirname(os.path.dirname(data_dir)))  # /kaggle/input/pscl-files
+        print(f'\nActual contents of {base} (up to 4 levels):')
+        for root, dirs, files in os.walk(base):
+            depth = root.replace(base, '').count(os.sep)
+            if depth > 4:
+                dirs[:] = []
+                continue
+            indent = '  ' * depth
+            print(f'{indent}{os.path.basename(root)}/')
+            if depth == 4:
+                dirs[:] = []
+        raise SystemExit(
+            '\nData verification FAILED.\n'
+            'Check the tree above and update --base so that '
+            '{base}/train/images_norm/ exists.'
+        )
     print('All splits verified.')
 
 

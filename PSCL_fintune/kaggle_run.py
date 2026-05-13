@@ -3,23 +3,31 @@ Kaggle script-mode entry point for MetalDAM → PSCL finetuning.
 
 Called by a tiny Kaggle launcher that clones the repo first:
 
-    import subprocess, sys
-    BASE            = '/kaggle/input/pscl-files'   # dataset with MetalDAM patches only
-    PSCL_REPO       = 'https://github.com/arhorri/PSCL'  # your PSCL GitHub repo
+    import os, subprocess, sys
+    BASE            = '/kaggle/input/pscl-files'
+    PSCL_REPO       = 'https://github.com/neulmc/PSCL'
     PRETRAIN_EPOCHS = 200
-    RESUME_DATASET  = ''   # '/kaggle/input/pscl-checkpoints' to resume
+    RESUME_DATASET  = ''
     STAGE           = 'both'
+    FINETUNE_LR_EN  = 1e-3
+    FINETUNE_LR_DE  = 1e-3
 
-    subprocess.run(['git', 'clone', '--branch', 'kaggle',
-                    'https://github.com/arhorri/PSCL_fintune.git',
-                    '/kaggle/working/repo'], check=True)
+    repo = '/kaggle/working/repo'
+    if os.path.exists(repo):
+        subprocess.run(['git', '-C', repo, 'pull'], check=True)
+    else:
+        subprocess.run(['git', 'clone', '--branch', 'kaggle',
+                        'https://github.com/arhorri/PSCL_fintune.git', repo], check=True)
+
     subprocess.run([sys.executable,
-                    '/kaggle/working/repo/PSCL_fintune/kaggle_run.py',
+                    f'{repo}/PSCL_fintune/kaggle_run.py',
                     f'--base={BASE}',
                     f'--pscl-repo={PSCL_REPO}',
                     f'--pretrain-epochs={PRETRAIN_EPOCHS}',
                     f'--resume-dataset={RESUME_DATASET}',
-                    f'--stage={STAGE}'], check=True)
+                    f'--stage={STAGE}',
+                    f'--finetune-lr-en={FINETUNE_LR_EN}',
+                    f'--finetune-lr-de={FINETUNE_LR_DE}'], check=True)
 
 Outputs written to /kaggle/working (download from the Output tab):
     self_UNet_metaldam/_Numf/f/moco{N}.pt   — Stage 1 checkpoints

@@ -12,8 +12,11 @@ Paste these 3 cells into a Colab notebook:
     FINETUNE_LR_EN   = 1e-3
     FINETUNE_LR_DE   = 1e-3
 
-── Cell 2 (Clone repo — run once per session) ────────────────────────────────
+── Cell 2 (Mount Drive + clone repo — run once per session) ──────────────────
     import os, subprocess, sys
+    from google.colab import drive
+    drive.mount('/content/drive')   # browser popup — click Allow
+
     repo = '/content/repo'
     if os.path.exists(repo):
         subprocess.run(['git', '-C', repo, 'pull'], check=True)
@@ -431,7 +434,6 @@ def main():
     print(f'  pretrain_epochs  : {args.pretrain_epochs}')
     print(f'  stage            : {args.stage}')
 
-    _mount_drive()
     code_dir, _pscl_src, data_dir = _setup(args)
     _check_env()
     _verify_data(data_dir)

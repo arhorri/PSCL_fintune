@@ -42,10 +42,13 @@ FINETUNE_LR_EN   = 1e-3     # Stage 2 encoder LR
 FINETUNE_LR_DE   = 1e-3     # Stage 2 decoder LR
 ```
 
-### Cell 2 — Clone repo (runs once per session, safe to re-run)
+### Cell 2 — Mount Drive + clone repo (run once per session)
 
 ```python
 import os, subprocess, sys
+from google.colab import drive
+
+drive.mount('/content/drive')   # browser popup appears — click Allow
 
 repo = '/content/repo'
 if os.path.exists(repo):
@@ -55,6 +58,9 @@ else:
                     'https://github.com/arhorri/PSCL_fintune.git', repo], check=True)
 print('Repo ready.')
 ```
+
+> **Important:** Drive must be mounted here, in the notebook cell — not inside the
+> script. The Drive auth popup only works in the main Colab kernel.
 
 ### Cell 3 — Run training
 
@@ -79,11 +85,10 @@ Click **Runtime → Run all**.
 ## Step 3 — What the script does
 
 On first run the script:
-1. Mounts Google Drive (a browser popup asks for permission — click Allow)
-2. Clones PSCL source from GitHub
-3. Verifies the 1,148 MetalDAM patches from the cloned repo
-4. Runs Stage 1 and/or Stage 2
-5. **Auto-saves all outputs to `DRIVE_DIR` when done**
+1. Clones PSCL source from GitHub
+2. Verifies the 1,148 MetalDAM patches from the cloned repo
+3. Runs Stage 1 and/or Stage 2
+4. **Auto-saves all outputs to `DRIVE_DIR` when done**
 
 **Stage 1 — Self-supervised pretraining (MoCo)**
 - Unlabeled pool: train split (788 patches)

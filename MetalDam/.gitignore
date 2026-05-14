@@ -1,0 +1,14 @@
+# Generated data — large, reproducible from raw inputs
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+outputs/

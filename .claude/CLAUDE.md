@@ -5,6 +5,16 @@ See `FINETUNING_GUIDE.md` for the full flowchart and step-by-step explanation.
 
 ---
 
+## Repository
+
+| | |
+|---|---|
+| GitHub | `https://github.com/arhorri/PSCL_fintune` |
+| SSH remote | `git@github.com:arhorri/PSCL_fintune.git` |
+| Active branch | `kaggle` (Kaggle script mode) |
+
+---
+
 ## Data paths
 
 | Dataset | Path |

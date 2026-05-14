@@ -1,5 +1,5 @@
 """
-Google Colab script-mode entry point for MetalDAM → PSCL finetuning.
+Google Colab entry point for MetalDAM → PSCL finetuning.
 
 Paste these 3 cells into a Colab notebook:
 
@@ -13,7 +13,7 @@ Paste these 3 cells into a Colab notebook:
     FINETUNE_LR_DE   = 1e-3
 
 ── Cell 2 (Mount Drive + clone repo — run once per session) ──────────────────
-    import os, subprocess, sys
+    import importlib, os, subprocess, sys
     from google.colab import drive
     drive.mount('/content/drive')   # browser popup — click Allow
 
@@ -25,26 +25,28 @@ Paste these 3 cells into a Colab notebook:
                         'https://github.com/arhorri/PSCL_fintune.git', repo], check=True)
     print('Repo ready.')
 
-── Cell 3 (Run training) ─────────────────────────────────────────────────────
-    subprocess.run([
-        sys.executable,
-        f'{repo}/PSCL_fintune/colab_run.py',
-        f'--drive-dir={DRIVE_DIR}',
-        f'--pscl-repo={PSCL_REPO}',
-        f'--pretrain-epochs={PRETRAIN_EPOCHS}',
-        f'--stage={STAGE}',
-        f'--self-lr={SELF_LR}',
-        f'--finetune-lr-en={FINETUNE_LR_EN}',
-        f'--finetune-lr-de={FINETUNE_LR_DE}',
-    ], check=True)
+── Cell 3 (Run training — output appears in real time) ───────────────────────
+    if f'{repo}/PSCL_fintune' not in sys.path:
+        sys.path.insert(0, f'{repo}/PSCL_fintune')
+    import colab_run
+    importlib.reload(colab_run)
 
-Outputs are saved automatically to Google Drive at DRIVE_DIR/:
+    colab_run.run(
+        drive_dir       = DRIVE_DIR,
+        pscl_repo       = PSCL_REPO,
+        pretrain_epochs = PRETRAIN_EPOCHS,
+        stage           = STAGE,
+        self_lr         = SELF_LR,
+        finetune_lr_en  = FINETUNE_LR_EN,
+        finetune_lr_de  = FINETUNE_LR_DE,
+    )
+
+Outputs saved automatically to DRIVE_DIR/:
     self_UNet_metaldam/_Numf/f/moco{N}.pt   — Stage 1 checkpoints
     fine_UNet_metaldam/_Numf/f/fine.pt       — Stage 2 best model
     training_curves.png                      — loss + val metrics
 """
 
-import argparse
 import glob
 import os
 import re
@@ -53,71 +55,20 @@ import sys
 
 
 # ---------------------------------------------------------------------------
-# Args
-# ---------------------------------------------------------------------------
-
-def _parse_args():
-    p = argparse.ArgumentParser(description='MetalDAM PSCL training — Colab script mode')
-    p.add_argument('--drive-dir', default='',
-                   dest='drive_dir',
-                   help='Google Drive folder for checkpoint persistence '
-                        '(e.g. /content/drive/MyDrive/PSCL_training). '
-                        'Empty = skip Drive.')
-    p.add_argument('--pscl-repo', default='https://github.com/neulmc/PSCL',
-                   dest='pscl_repo',
-                   help='GitHub URL of the PSCL repo to clone')
-    p.add_argument('--data-dir', default='',
-                   dest='data_dir',
-                   help='Direct path to MetalDam/data/patches/. '
-                        'Defaults to /content/repo/MetalDam/data/patches')
-    p.add_argument('--pretrain-epochs', type=int, default=200,
-                   dest='pretrain_epochs')
-    p.add_argument('--self-lr', type=float, default=1e-3,
-                   dest='self_lr',
-                   help='Stage 1 pretraining LR (default 1e-3)')
-    p.add_argument('--finetune-lr-en', type=float, default=1e-3,
-                   dest='finetune_lr_en',
-                   help='Stage 2 encoder LR (default 1e-3)')
-    p.add_argument('--finetune-lr-de', type=float, default=1e-3,
-                   dest='finetune_lr_de',
-                   help='Stage 2 decoder LR (default 1e-3)')
-    p.add_argument('--stage', choices=['self', 'fine', 'both'], default='both')
-    p.add_argument('--gpu', default='0')
-    return p.parse_args()
-
-
-# ---------------------------------------------------------------------------
-# Drive
-# ---------------------------------------------------------------------------
-
-def _mount_drive():
-    try:
-        from google.colab import drive
-        drive.mount('/content/drive')
-        print('Google Drive mounted.')
-    except ImportError:
-        print('WARNING: not running in Colab — Drive mount skipped.')
-
-
-# ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
 
-def _setup(args):
+def _setup(pscl_repo, drive_dir, data_dir_override):
     work     = '/content'
     code_dir = os.path.join(work, 'repo', 'PSCL_fintune')
     pscl_root = os.path.join(work, 'PSCL')
-    data_dir = args.data_dir if args.data_dir else \
-               os.path.join(work, 'repo', 'MetalDam', 'data', 'patches')
+    data_dir = data_dir_override or os.path.join(work, 'repo', 'MetalDam', 'data', 'patches')
 
     # Clone PSCL source
     if not os.path.exists(pscl_root):
         import subprocess
-        print(f'Cloning PSCL from {args.pscl_repo} ...')
-        subprocess.run(
-            ['git', 'clone', '--depth', '1', args.pscl_repo, pscl_root],
-            check=True
-        )
+        print(f'Cloning PSCL from {pscl_repo} ...')
+        subprocess.run(['git', 'clone', '--depth', '1', pscl_repo, pscl_root], check=True)
         print('PSCL cloned.')
     else:
         print('PSCL source already present.')
@@ -132,11 +83,11 @@ def _setup(args):
             f'model.py not found in {pscl_root} or {pscl_root}/PSCL/\n'
             'Check the PSCL repo structure.'
         )
-    print(f'PSCL source dir: {pscl_src}')
+    print(f'PSCL source dir : {pscl_src}')
 
     # Restore Stage 1 checkpoints from Drive
-    if args.drive_dir:
-        ckpt_src = os.path.join(args.drive_dir, 'self_UNet_metaldam', '_Numf', 'f')
+    if drive_dir:
+        ckpt_src = os.path.join(drive_dir, 'self_UNet_metaldam', '_Numf', 'f')
         ckpt_dst = os.path.join(code_dir, 'self_UNet_metaldam', '_Numf', 'f')
         if os.path.exists(ckpt_dst):
             print(f'Checkpoints already present at {ckpt_dst}')
@@ -153,7 +104,7 @@ def _setup(args):
             sys.path.insert(0, p)
     os.chdir(code_dir)
 
-    return code_dir, pscl_src, data_dir
+    return code_dir, data_dir
 
 
 # ---------------------------------------------------------------------------
@@ -190,10 +141,10 @@ def _verify_data(data_dir):
         if not ok:
             all_ok = False
     if not all_ok:
-        raise SystemExit(
-            '\nData verification FAILED.\n'
+        raise RuntimeError(
+            f'\nData verification FAILED.\n'
             f'Expected patches at: {data_dir}\n'
-            'Make sure the repo was cloned and MetalDam/ is inside it.'
+            'Make sure the repo was cloned (Cell 2) and MetalDam/ is inside it.'
         )
     print('All splits verified.')
 
@@ -216,8 +167,8 @@ def _detect_checkpoint(code_dir):
 # Training stages
 # ---------------------------------------------------------------------------
 
-def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gpu,
-                self_lr=1e-3):
+def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt,
+                gpu, self_lr):
     remaining = pretrain_epochs - start_epoch
     print(f'\n{"="*60}')
     print('Stage 1 — Self-supervised pretraining')
@@ -242,7 +193,7 @@ def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gp
 
 
 def _run_stage2(cfg_mod, code_dir, data_dir, pretrain_epochs, gpu,
-                finetune_lr_en=1e-3, finetune_lr_de=1e-3):
+                finetune_lr_en, finetune_lr_de):
     fine_ckpt = os.path.join(code_dir, 'fine_UNet_metaldam', '_Numf', 'f', 'fine.pt')
     moco_ckpt = os.path.join(code_dir, 'self_UNet_metaldam', '_Numf', 'f',
                               f'moco{pretrain_epochs}.pt')
@@ -295,7 +246,6 @@ def _save_to_drive(code_dir, drive_dir):
         files = [f for f in os.listdir(dst) if f.endswith('.pt')]
         saved.append(f'  {label}: {len(files)} file(s) → {dst}')
 
-    # Also save training curves
     curves = '/content/training_curves.png'
     if os.path.exists(curves):
         shutil.copy(curves, os.path.join(drive_dir, 'training_curves.png'))
@@ -422,21 +372,32 @@ def _save_curves(code_dir):
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Main entry point (called directly from Cell 3)
 # ---------------------------------------------------------------------------
 
-def main():
-    args = _parse_args()
+def run(
+    drive_dir       = '/content/drive/MyDrive/PSCL_training',
+    pscl_repo       = 'https://github.com/neulmc/PSCL',
+    data_dir        = '',
+    pretrain_epochs = 200,
+    stage           = 'both',
+    self_lr         = 1e-3,
+    finetune_lr_en  = 1e-3,
+    finetune_lr_de  = 1e-3,
+    gpu             = '0',
+):
+    print('MetalDAM → PSCL  |  Colab')
+    print(f'  drive_dir       : {drive_dir or "(none)"}')
+    print(f'  pscl_repo       : {pscl_repo}')
+    print(f'  pretrain_epochs : {pretrain_epochs}')
+    print(f'  stage           : {stage}')
+    print(f'  self_lr         : {self_lr}')
+    print(f'  finetune_lr_en  : {finetune_lr_en}')
+    print(f'  finetune_lr_de  : {finetune_lr_de}')
 
-    print('MetalDAM → PSCL  |  Colab script mode')
-    print(f'  drive_dir        : {args.drive_dir or "(none — Drive not used)"}')
-    print(f'  pscl_repo        : {args.pscl_repo}')
-    print(f'  pretrain_epochs  : {args.pretrain_epochs}')
-    print(f'  stage            : {args.stage}')
-
-    code_dir, _pscl_src, data_dir = _setup(args)
+    code_dir, resolved_data_dir = _setup(pscl_repo, drive_dir, data_dir)
     _check_env()
-    _verify_data(data_dir)
+    _verify_data(resolved_data_dir)
 
     import config_metaldam
 
@@ -446,23 +407,39 @@ def main():
     else:
         print('\nNo existing Stage 1 checkpoint — starting fresh.')
 
-    if args.stage in ('self', 'both'):
-        if start_epoch >= args.pretrain_epochs:
+    if stage in ('self', 'both'):
+        if start_epoch >= pretrain_epochs:
             print(f'\nStage 1 already complete at epoch {start_epoch}. Skipping.')
         else:
-            _run_stage1(config_metaldam, data_dir, args.pretrain_epochs,
-                        start_epoch, resume_ckpt, args.gpu,
-                        self_lr=args.self_lr)
+            _run_stage1(config_metaldam, resolved_data_dir, pretrain_epochs,
+                        start_epoch, resume_ckpt, gpu, self_lr)
 
-    if args.stage in ('fine', 'both'):
-        _run_stage2(config_metaldam, code_dir, data_dir, args.pretrain_epochs, args.gpu,
-                    finetune_lr_en=args.finetune_lr_en,
-                    finetune_lr_de=args.finetune_lr_de)
+    if stage in ('fine', 'both'):
+        _run_stage2(config_metaldam, code_dir, resolved_data_dir, pretrain_epochs,
+                    gpu, finetune_lr_en, finetune_lr_de)
 
     _list_outputs(code_dir)
     _save_curves(code_dir)
-    _save_to_drive(code_dir, args.drive_dir)
+    _save_to_drive(code_dir, drive_dir)
 
+
+# ---------------------------------------------------------------------------
+# CLI fallback (for local / Kaggle use)
+# ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument('--drive-dir',       default='')
+    p.add_argument('--pscl-repo',       default='https://github.com/neulmc/PSCL')
+    p.add_argument('--data-dir',        default='')
+    p.add_argument('--pretrain-epochs', type=int,   default=200)
+    p.add_argument('--stage',           default='both')
+    p.add_argument('--self-lr',         type=float, default=1e-3)
+    p.add_argument('--finetune-lr-en',  type=float, default=1e-3)
+    p.add_argument('--finetune-lr-de',  type=float, default=1e-3)
+    p.add_argument('--gpu',             default='0')
+    a = p.parse_args()
+    run(drive_dir=a.drive_dir, pscl_repo=a.pscl_repo, data_dir=a.data_dir,
+        pretrain_epochs=a.pretrain_epochs, stage=a.stage, self_lr=a.self_lr,
+        finetune_lr_en=a.finetune_lr_en, finetune_lr_de=a.finetune_lr_de, gpu=a.gpu)

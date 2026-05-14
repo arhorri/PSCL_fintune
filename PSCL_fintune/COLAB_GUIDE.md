@@ -45,7 +45,7 @@ FINETUNE_LR_DE   = 1e-3     # Stage 2 decoder LR
 ### Cell 2 — Mount Drive + clone repo (run once per session)
 
 ```python
-import os, subprocess, sys
+import importlib, os, subprocess, sys
 from google.colab import drive
 
 drive.mount('/content/drive')   # browser popup appears — click Allow
@@ -65,17 +65,20 @@ print('Repo ready.')
 ### Cell 3 — Run training
 
 ```python
-subprocess.run([
-    sys.executable,
-    f'{repo}/PSCL_fintune/colab_run.py',
-    f'--drive-dir={DRIVE_DIR}',
-    f'--pscl-repo={PSCL_REPO}',
-    f'--pretrain-epochs={PRETRAIN_EPOCHS}',
-    f'--stage={STAGE}',
-    f'--self-lr={SELF_LR}',
-    f'--finetune-lr-en={FINETUNE_LR_EN}',
-    f'--finetune-lr-de={FINETUNE_LR_DE}',
-], check=True)
+if f'{repo}/PSCL_fintune' not in sys.path:
+    sys.path.insert(0, f'{repo}/PSCL_fintune')
+import colab_run
+importlib.reload(colab_run)   # picks up latest version after git pull
+
+colab_run.run(
+    drive_dir       = DRIVE_DIR,
+    pscl_repo       = PSCL_REPO,
+    pretrain_epochs = PRETRAIN_EPOCHS,
+    stage           = STAGE,
+    self_lr         = SELF_LR,
+    finetune_lr_en  = FINETUNE_LR_EN,
+    finetune_lr_de  = FINETUNE_LR_DE,
+)
 ```
 
 Click **Runtime → Run all**.

@@ -66,9 +66,9 @@ def _parse_args():
                    help='GitHub URL of the PSCL repo to clone '
                         '(e.g. https://github.com/arhorri/PSCL). '
                         'If empty, falls back to copying from --base/pscl_fintune_code/PSCL/')
-    p.add_argument('--self-lr', type=float, default=1e-4,
+    p.add_argument('--self-lr', type=float, default=1e-3,
                    dest='self_lr',
-                   help='Pretraining (Stage 1) learning rate (default 1e-4)')
+                   help='Pretraining (Stage 1) learning rate (default 1e-3)')
     p.add_argument('--finetune-lr-en', type=float, default=1e-4,
                    dest='finetune_lr_en',
                    help='Finetuning LR for the encoder (default 1e-4)')
@@ -249,9 +249,10 @@ def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gp
         start_epoch=start_epoch,
         resume_ckpt=resume_ckpt,
         selfmode='moco',
-        moco_denseloss_ratio=0.7,
+        moco_denseloss_ratio=0.5,
         temperature=0.07,
         self_lr=self_lr,
+        sche=True,
         env=gpu,
     )
     print('Stage 1 complete.')

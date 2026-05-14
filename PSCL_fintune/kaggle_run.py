@@ -85,12 +85,14 @@ def _parse_args():
 def _setup(args):
     work = '/kaggle/working'
     code_dir = os.path.join(work, 'repo', 'PSCL_fintune')
-    pscl_src = os.path.join(work, 'PSCL', 'PSCL')
+    # PSCL repos vary: model.py may be at repo root or inside a PSCL/ subfolder
+    pscl_root = os.path.join(work, 'PSCL')
+    pscl_src  = pscl_root  # resolved after clone below
     data_dir = args.data_dir if args.data_dir else \
                os.path.join(args.base, 'metaldam_patches', 'MetalDam', 'data', 'patches')
 
     # Get PSCL source — clone from GitHub (preferred) or copy from dataset
-    if not os.path.exists(pscl_src):
+    if not os.path.exists(pscl_root):
         if args.pscl_repo:
             import subprocess
             print(f'Cloning PSCL from {args.pscl_repo} ...')
@@ -121,6 +123,19 @@ def _setup(args):
             print('PSCL source copied from dataset.')
     else:
         print('PSCL source already present.')
+
+    # Auto-detect where model.py lives inside the cloned PSCL repo
+    # Some repos have PSCL/model.py at root, others at PSCL/PSCL/model.py
+    if os.path.isfile(os.path.join(pscl_root, 'PSCL', 'model.py')):
+        pscl_src = os.path.join(pscl_root, 'PSCL')
+    elif os.path.isfile(os.path.join(pscl_root, 'model.py')):
+        pscl_src = pscl_root
+    else:
+        raise FileNotFoundError(
+            f'model.py not found in {pscl_root} or {pscl_root}/PSCL/\n'
+            f'Check the structure of the cloned PSCL repo.'
+        )
+    print(f'PSCL source dir: {pscl_src}')
 
     # Restore Stage 1 checkpoints from a previous session's dataset
     if args.resume_dataset:

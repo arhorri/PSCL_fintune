@@ -252,7 +252,6 @@ def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gp
         moco_denseloss_ratio=0.7,
         temperature=0.07,
         self_lr=self_lr,
-        sche=True,
         env=gpu,
     )
     print('Stage 1 complete.')

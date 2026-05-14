@@ -66,6 +66,9 @@ def _parse_args():
                    help='GitHub URL of the PSCL repo to clone '
                         '(e.g. https://github.com/arhorri/PSCL). '
                         'If empty, falls back to copying from --base/pscl_fintune_code/PSCL/')
+    p.add_argument('--self-lr', type=float, default=1e-4,
+                   dest='self_lr',
+                   help='Pretraining (Stage 1) learning rate (default 1e-4)')
     p.add_argument('--finetune-lr-en', type=float, default=1e-4,
                    dest='finetune_lr_en',
                    help='Finetuning LR for the encoder (default 1e-4)')
@@ -230,11 +233,13 @@ def _detect_checkpoint(code_dir):
 # Training stages
 # ---------------------------------------------------------------------------
 
-def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gpu):
+def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gpu,
+                self_lr=1e-4):
     remaining = pretrain_epochs - start_epoch
     print(f'\n{"="*60}')
     print(f'Stage 1 — Self-supervised pretraining')
     print(f'  Epochs: {start_epoch} → {pretrain_epochs}  ({remaining} remaining)')
+    print(f'  LR    : {self_lr}')
     print('='*60)
     cfg_mod.run(
         method='self',
@@ -246,6 +251,7 @@ def _run_stage1(cfg_mod, data_dir, pretrain_epochs, start_epoch, resume_ckpt, gp
         selfmode='moco',
         moco_denseloss_ratio=0.7,
         temperature=0.07,
+        self_lr=self_lr,
         env=gpu,
     )
     print('Stage 1 complete.')
@@ -425,7 +431,8 @@ def main():
             print(f'\nStage 1 already complete at epoch {start_epoch}. Skipping.')
         else:
             _run_stage1(config_metaldam, data_dir, args.pretrain_epochs,
-                        start_epoch, resume_ckpt, args.gpu)
+                        start_epoch, resume_ckpt, args.gpu,
+                        self_lr=args.self_lr)
 
     if args.stage in ('fine', 'both'):
         _run_stage2(config_metaldam, code_dir, data_dir, args.pretrain_epochs, args.gpu,

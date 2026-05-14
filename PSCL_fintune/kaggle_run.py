@@ -51,6 +51,10 @@ def _parse_args():
     p = argparse.ArgumentParser(description='MetalDAM PSCL training — Kaggle script mode')
     p.add_argument('--base', default='/kaggle/input/pscl-files',
                    help='Root of the pscl-files Kaggle dataset')
+    p.add_argument('--data-dir', default='',
+                   dest='data_dir',
+                   help='Direct path to MetalDam/data/patches/ directory. '
+                        'Overrides the path computed from --base.')
     p.add_argument('--pretrain-epochs', type=int, default=200,
                    dest='pretrain_epochs')
     p.add_argument('--resume-dataset', default='',
@@ -82,7 +86,8 @@ def _setup(args):
     work = '/kaggle/working'
     code_dir = os.path.join(work, 'repo', 'PSCL_fintune')
     pscl_src = os.path.join(work, 'PSCL', 'PSCL')
-    data_dir = os.path.join(args.base, 'metaldam_patches', 'MetalDam', 'data', 'patches')
+    data_dir = args.data_dir if args.data_dir else \
+               os.path.join(args.base, 'metaldam_patches', 'MetalDam', 'data', 'patches')
 
     # Get PSCL source — clone from GitHub (preferred) or copy from dataset
     if not os.path.exists(pscl_src):
